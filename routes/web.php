@@ -50,3 +50,8 @@ Route::middleware('throttle:public-survey')->group(function () {
     Route::get('/s/{survey:public_token}/thanks', [SurveyResponseController::class, 'thanks'])
         ->name('surveys.thanks');
 });
+
+// Branching auto-save fires on every answer, so it gets a more generous limit.
+Route::post('/s/{survey:public_token}/answer', [SurveyResponseController::class, 'answer'])
+    ->middleware('throttle:120,1')
+    ->name('surveys.answer');

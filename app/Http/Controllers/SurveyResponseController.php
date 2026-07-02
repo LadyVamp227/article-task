@@ -6,6 +6,7 @@ use App\Jobs\ProcessSurveyResponse;
 use App\Models\Survey;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -25,7 +26,8 @@ class SurveyResponseController extends Controller
     private const int|float COOKIE_MINUTES = 60 * 24 * 365;
 
     /**
-     * Show the public form for answering a survey.
+     * Show the public survey. Linear surveys render every question at once;
+     * branching surveys render one question at a time (resuming if in progress).
      */
     public function create(Request $request, Survey $survey): View
     {
@@ -34,9 +36,35 @@ class SurveyResponseController extends Controller
         }
 
         $token = $this->respondentToken($request);
+        $response = $survey->responseFrom($token);
 
-        if ($survey->hasResponseFrom($token)) {
+        if ($response?->completed_at !== null) {
             return view('surveys.already', ['survey' => $survey]);
+        }
+
+        if ($survey->isBranching()) {
+            $questions = $survey->questions()->with('options')->get();
+
+            if ($questions->isEmpty()) {
+                return view('surveys.closed', ['survey' => $survey]);
+            }
+
+            return view('surveys.wizard', [
+                'survey' => $survey,
+                'questions' => $questions->map(fn ($q) => [
+                    'id' => $q->id,
+                    'title' => $q->title,
+                    'type' => $q->type,
+                    'required' => (bool) $q->is_required,
+                    'options' => $q->options->map(fn ($o) => [
+                        'id' => $o->id,
+                        'title' => $o->title,
+                        'next' => $o->next_question_id,
+                    ])->values(),
+                ])->values(),
+                'startId' => $questions->first()->id,
+                'savedAnswers' => (object) ($response?->answers_payload ?? []),
+            ]);
         }
 
         $survey->load('questions.options');
@@ -45,10 +73,15 @@ class SurveyResponseController extends Controller
     }
 
     /**
-     * Persist a respondent's answers, enforcing one submission per person.
+     * Store a full linear submission (all answers at once).
      */
     public function store(Request $request, Survey $survey): RedirectResponse
     {
+        // Branching surveys submit one answer at a time via answer().
+        if ($survey->isBranching()) {
+            return redirect()->route('surveys.respond', $survey);
+        }
+
         if (! $survey->isAcceptingResponses()) {
             return redirect()
                 ->route('surveys.respond', $survey)
@@ -57,7 +90,7 @@ class SurveyResponseController extends Controller
 
         $token = $this->respondentToken($request);
 
-        if ($survey->hasResponseFrom($token)) {
+        if ($survey->responseFrom($token)?->completed_at !== null) {
             return redirect()
                 ->route('surveys.thanks', $survey)
                 ->with('status', 'You have already answered this survey.');
@@ -72,11 +105,12 @@ class SurveyResponseController extends Controller
         );
 
         try {
-            // Answers payload for the case when the queue fails.
+            // Answers saved durably here so nothing is lost if the queue fails.
             $response = $survey->responses()->create([
                 'respondent_token' => $token,
                 'answers_payload' => $validated['answers'] ?? [],
                 'submitted_at' => now(),
+                'completed_at' => now(),
             ]);
         } catch (UniqueConstraintViolationException) {
             return redirect()
@@ -91,6 +125,50 @@ class SurveyResponseController extends Controller
         return redirect()
             ->route('surveys.thanks', $survey)
             ->with('status', 'Thanks! Your response has been recorded.');
+    }
+
+    /**
+     * Auto-save a branching survey's answers (called on every change by the
+     * wizard) and, when `completed` is true, finalise the submission. Progress
+     * is persisted each time so an accidental browser-close can resume.
+     */
+    public function answer(Request $request, Survey $survey): JsonResponse
+    {
+        if (! $survey->isBranching() || ! $survey->isAcceptingResponses()) {
+            return response()->json(['status' => 'unavailable'], 422);
+        }
+
+        $token = $this->respondentToken($request);
+        $existing = $survey->responseFrom($token);
+
+        if ($existing?->completed_at !== null) {
+            return response()->json(['status' => 'completed']);
+        }
+
+        $data = $request->validate([
+            'answers' => ['array'],
+            'completed' => ['boolean'],
+        ]);
+
+        $answers = $this->sanitizeBranchingAnswers($survey, $data['answers'] ?? []);
+        $completed = (bool) ($data['completed'] ?? false);
+
+        $response = $survey->responses()->updateOrCreate(
+            ['respondent_token' => $token],
+            [
+                'answers_payload' => $answers,
+                'submitted_at' => $existing->submitted_at ?? now(),
+                'completed_at' => $completed ? now() : null,
+            ],
+        );
+
+        Cookie::queue(self::COOKIE, $token, self::COOKIE_MINUTES);
+
+        if ($completed) {
+            ProcessSurveyResponse::dispatch($response->id);
+        }
+
+        return response()->json(['status' => $completed ? 'completed' : 'saved']);
     }
 
     /**
@@ -114,7 +192,50 @@ class SurveyResponseController extends Controller
     }
 
     /**
-     * Build dynamic validation rules from the survey's questions.
+     * Keep only valid answers (option ids that belong to their question, and
+     * capped text) so a tampered auto-save payload can't inject bad data.
+     *
+     * @param  array<int|string, mixed>  $answers
+     * @return array<string, mixed>
+     */
+    private function sanitizeBranchingAnswers(Survey $survey, array $answers): array
+    {
+        $questions = $survey->questions()->with('options')->get()->keyBy('id');
+        $clean = [];
+
+        foreach ($answers as $questionId => $value) {
+            $question = $questions->get((int) $questionId);
+
+            if ($question === null) {
+                continue;
+            }
+
+            if ($question->type === 'multiple_choice') {
+                $optionIds = $question->options->pluck('id')->all();
+                $picked = array_values(array_filter(
+                    array_map('intval', (array) $value),
+                    fn ($id) => in_array($id, $optionIds, true),
+                ));
+                if ($picked !== []) {
+                    $clean[(string) $questionId] = $picked;
+                }
+            } elseif ($question->type === 'single_choice') {
+                if (in_array((int) $value, $question->options->pluck('id')->all(), true)) {
+                    $clean[(string) $questionId] = (int) $value;
+                }
+            } else {
+                $text = is_string($value) ? trim($value) : '';
+                if ($text !== '') {
+                    $clean[(string) $questionId] = mb_substr($text, 0, 5000);
+                }
+            }
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Build dynamic validation rules from the survey's questions (linear).
      *
      * @return array<string, mixed>
      */
@@ -142,7 +263,7 @@ class SurveyResponseController extends Controller
     }
 
     /**
-     * Human-friendly attribute names for validation messages.
+     * Human-friendly attribute names for validation messages (linear).
      *
      * @return array<string, string>
      */

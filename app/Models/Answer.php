@@ -20,14 +20,6 @@ class Answer extends Model
     ];
 
     /**
-     * @return BelongsTo<SurveyResponse, $this>
-     */
-    public function response(): BelongsTo
-    {
-        return $this->belongsTo(SurveyResponse::class, 'survey_response_id');
-    }
-
-    /**
      * @return BelongsTo<Question, $this>
      */
     public function question(): BelongsTo
