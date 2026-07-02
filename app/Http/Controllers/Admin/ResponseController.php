@@ -82,7 +82,7 @@ class ResponseController extends Controller
 
             if (in_array($question->type, ['single_choice', 'multiple_choice'], true)) {
                 $entry['options'] = $question->options->map(fn ($option) => [
-                    'label' => $option->label,
+                    'title' => $option->title,
                     'count' => (int) ($optionCounts[$option->id] ?? 0),
                     'percent' => $total > 0 ? round(($optionCounts[$option->id] ?? 0) / $total * 100) : 0,
                 ])->all();

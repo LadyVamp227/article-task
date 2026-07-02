@@ -20,6 +20,9 @@ return new class extends Migration
             // data is never lost even if the queued job fails permanently.
             $table->json('answers_payload')->nullable();
             $table->timestamp('submitted_at');
+            // Set when the respondent has finished the whole survey (branching
+            // surveys stay in-progress, with answers_payload, until then).
+            $table->timestamp('completed_at')->nullable();
             // Set once the answers have been expanded into the `answers` table.
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();

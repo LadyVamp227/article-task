@@ -19,8 +19,9 @@ class QuestionOption extends Model
      */
     protected $fillable = [
         'question_id',
-        'label',
+        'title',
         'value',
+        'next_question_id',
     ];
 
     /**
@@ -29,5 +30,15 @@ class QuestionOption extends Model
     public function question(): BelongsTo
     {
         return $this->belongsTo(Question::class);
+    }
+
+    /**
+     * The question to jump to when this option is chosen (branching surveys).
+     *
+     * @return BelongsTo<Question, $this>
+     */
+    public function nextQuestion(): BelongsTo
+    {
+        return $this->belongsTo(Question::class, 'next_question_id');
     }
 }

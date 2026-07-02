@@ -23,6 +23,7 @@ class SurveyResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'status' => $this->status,
+            'type' => $this->type,
             'public_token' => $this->public_token,
             'public_url' => $this->publicUrl(),
             'starts_at' => $this->starts_at?->toIso8601String(),

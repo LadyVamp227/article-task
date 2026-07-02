@@ -21,8 +21,9 @@ class QuestionOptionResource extends JsonResource
         return [
             'id' => $this->id,
             'question_id' => $this->question_id,
-            'label' => $this->label,
+            'title' => $this->title,
             'value' => $this->value,
+            'next_question_id' => $this->next_question_id,
         ];
     }
 }

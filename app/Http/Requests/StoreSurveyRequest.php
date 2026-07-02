@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\PreventsBranchingLoops;
 use App\Models\Question;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Rule;
 
 class StoreSurveyRequest extends FormRequest
 {
+    use PreventsBranchingLoops;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -28,17 +31,20 @@ class StoreSurveyRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', Rule::in(['draft', 'published', 'closed'])],
+            'type' => ['required', Rule::in(['linear', 'branching'])],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
 
             'questions' => ['required', 'array', 'min:1'],
+            'questions.*.key' => ['nullable', 'string', 'max:255'],
             'questions.*.title' => ['required', 'string', 'max:255'],
             'questions.*.type' => ['required', Rule::in(Question::TYPES)],
             'questions.*.is_required' => ['boolean'],
 
             'questions.*.options' => ['sometimes', 'array'],
-            'questions.*.options.*.label' => ['required', 'string', 'max:255'],
+            'questions.*.options.*.title' => ['required', 'string', 'max:255'],
             'questions.*.options.*.value' => ['nullable', 'string', 'max:255'],
+            'questions.*.options.*.next_key' => ['nullable', 'string', 'max:255'],
         ];
     }
 

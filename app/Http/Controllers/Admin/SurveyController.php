@@ -34,7 +34,7 @@ class SurveyController extends Controller
     public function create(): View
     {
         return view('admin.surveys.create', [
-            'survey' => new Survey(['status' => 'draft']),
+            'survey' => new Survey(['status' => 'draft', 'type' => 'linear']),
             'questionTypes' => Question::TYPES,
         ]);
     }

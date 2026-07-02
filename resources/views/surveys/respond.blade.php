@@ -45,7 +45,7 @@
                                                @checked(old($field) == $option->id)
                                                @required($question->is_required)
                                                class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <span>{{ $option->label }}</span>
+                                        <span>{{ $option->title }}</span>
                                     </label>
                                 @endforeach
                             </div>
@@ -58,7 +58,7 @@
                                         <input type="checkbox" name="answers[{{ $question->id }}][]" value="{{ $option->id }}"
                                                @checked(collect(old($field, []))->contains($option->id))
                                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <span>{{ $option->label }}</span>
+                                        <span>{{ $option->title }}</span>
                                     </label>
                                 @endforeach
                             </div>

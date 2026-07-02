@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('public_token', 64)->unique();
             $table->text('description')->nullable();
             $table->string('status'); // draft | published | closed (required)
+            $table->string('type')->default('linear'); // linear | branching
             $table->timestamp('starts_at')->nullable();
             $table->timestamp('ends_at')->nullable();
             $table->timestamps();

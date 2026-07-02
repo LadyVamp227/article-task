@@ -19,12 +19,12 @@ class QuestionOptionFactory extends Factory
      */
     public function definition(): array
     {
-        $label = fake()->words(2, true);
+        $title = fake()->words(2, true);
 
         return [
             'question_id' => Question::factory(),
-            'label' => Str::ucfirst($label),
-            'value' => Str::slug($label),
+            'title' => Str::ucfirst($title),
+            'value' => Str::slug($title),
         ];
     }
 }

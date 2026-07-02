@@ -22,9 +22,18 @@ class Survey extends Model
         'title',
         'description',
         'status',
+        'type',
         'starts_at',
         'ends_at',
     ];
+
+    /**
+     * Whether this survey uses conditional branching (skip logic).
+     */
+    public function isBranching(): bool
+    {
+        return $this->type === 'branching';
+    }
 
     /**
      * Event listener for the model which create publicToken before inserting the data into the DB
@@ -108,12 +117,12 @@ class Survey extends Model
     }
 
     /**
-     * Whether the given respondent token has already submitted this survey.
+     * The response for a respondent token, if any (may be in-progress or completed).
      */
-    public function hasResponseFrom(string $respondentToken): bool
+    public function responseFrom(string $respondentToken): ?SurveyResponse
     {
         return $this->responses()
             ->where('respondent_token', $respondentToken)
-            ->exists();
+            ->first();
     }
 }

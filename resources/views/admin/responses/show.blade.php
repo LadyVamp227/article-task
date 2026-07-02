@@ -30,7 +30,7 @@
                 @elseif (in_array($question->type, ['single_choice', 'multiple_choice']))
                     <ul class="list-inside list-disc text-sm text-gray-700">
                         @foreach ($answers as $answer)
-                            <li>{{ $answer->option?->label ?? '—' }}</li>
+                            <li>{{ $answer->option?->title ?? '—' }}</li>
                         @endforeach
                     </ul>
                 @else

@@ -40,8 +40,9 @@ class ProcessSurveyResponse implements ShouldQueue
     {
         $response = SurveyResponse::find($this->surveyResponseId);
 
-        // Already processed (or gone) — nothing to do. Cheap check without a lock.
-        if ($response === null || $response->processed_at !== null) {
+        // Skip if gone, already processed, or not finished yet (an in-progress
+        // branching response must not be normalized until it is completed).
+        if ($response === null || $response->processed_at !== null || $response->completed_at === null) {
             return;
         }
 
