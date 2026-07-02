@@ -20,7 +20,8 @@ class ReprocessPendingResponses extends Command
         $minutes = (int) $this->option('minutes');
 
         $pending = SurveyResponse::query()
-            ->whereNull('processed_at')
+            ->whereNotNull('completed_at')   // only finished responses
+            ->whereNull('processed_at')      // that were never normalized
             ->where('created_at', '<=', now()->subMinutes($minutes))
             ->get();
 

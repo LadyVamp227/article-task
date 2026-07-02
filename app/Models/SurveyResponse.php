@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SurveyResponse extends Model
@@ -18,6 +17,7 @@ class SurveyResponse extends Model
         'respondent_token',
         'answers_payload',
         'submitted_at',
+        'completed_at',
         'processed_at',
     ];
 
@@ -29,16 +29,9 @@ class SurveyResponse extends Model
         return [
             'answers_payload' => 'array',
             'submitted_at' => 'datetime',
+            'completed_at' => 'datetime',
             'processed_at' => 'datetime',
         ];
-    }
-
-    /**
-     * @return BelongsTo<Survey, $this>
-     */
-    public function survey(): BelongsTo
-    {
-        return $this->belongsTo(Survey::class);
     }
 
     /**

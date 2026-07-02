@@ -49,7 +49,7 @@
                             @forelse ($s['options'] as $opt)
                                 <div>
                                     <div class="mb-0.5 flex justify-between text-sm">
-                                        <span class="text-gray-700">{{ $opt['label'] }}</span>
+                                        <span class="text-gray-700">{{ $opt['title'] }}</span>
                                         <span class="text-gray-500">{{ $opt['count'] }} ({{ $opt['percent'] }}%)</span>
                                     </div>
                                     <div class="h-2 w-full overflow-hidden rounded-full bg-gray-100">

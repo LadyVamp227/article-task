@@ -1,12 +1,16 @@
 @php
+    // Use each question's DB id as its builder "key" so an option's saved
+    // next_question_id can be re-linked to the right question on edit.
     $existingQuestions = $survey->exists
         ? $survey->questions->map(fn ($q) => [
+            'key' => (string) $q->id,
             'title' => $q->title,
             'type' => $q->type,
             'is_required' => (bool) $q->is_required,
             'options' => $q->options->map(fn ($o) => [
-                'label' => $o->label,
+                'title' => $o->title,
                 'value' => $o->value,
+                'next_key' => $o->next_question_id ? (string) $o->next_question_id : '',
             ])->values(),
         ])->values()
         : [];
@@ -16,6 +20,7 @@
 
 <form method="POST"
       action="{{ $survey->exists ? route('admin.surveys.update', $survey) : route('admin.surveys.store') }}"
+      x-data="surveyForm(@js($initialQuestions), @js(old('type', $survey->type ?? 'linear')))"
       class="space-y-8">
     @csrf
     @if ($survey->exists)
@@ -48,6 +53,17 @@
             @error('description') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
 
+        <div>
+            <label for="type" class="block text-sm font-medium text-gray-700">Survey type</label>
+            <select id="type" name="type" x-model="type"
+                    class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                @foreach (['linear' => 'Linear — all questions shown', 'branching' => 'Branching — answers decide the next question'] as $value => $label)
+                    <option value="{{ $value }}">{{ $label }}</option>
+                @endforeach
+            </select>
+            @error('type') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+        </div>
+
         <div class="grid gap-5 sm:grid-cols-3">
             <div>
                 <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
@@ -76,8 +92,8 @@
         </div>
     </section>
 
-    {{-- Questions builder (Alpine) --}}
-    <section class="space-y-4" x-data="surveyForm(@js($initialQuestions))">
+    {{-- Questions builder (Alpine; the component lives on the <form>) --}}
+    <section class="space-y-4">
         <div class="flex items-center justify-between">
             <h2 class="text-base font-semibold text-gray-900">
                 Questions <span class="text-red-500" title="At least one question is required">*</span>
@@ -98,8 +114,10 @@
             </p>
         </template>
 
-        <template x-for="(q, qi) in questions" x-bind:key="qi">
+        <template x-for="(q, qi) in questions" x-bind:key="q.key">
             <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                {{-- Stable client key so branching options can target this question before it has a DB id. --}}
+                <input type="hidden" x-bind:name="`questions[${qi}][key]`" x-bind:value="q.key">
                 <div class="mb-4 flex items-start justify-between gap-4">
                     <span class="mt-2 text-sm font-semibold text-gray-400" x-text="'#' + (qi + 1)"></span>
                     <button type="button" x-on:click="removeQuestion(qi)"
@@ -147,12 +165,34 @@
                         </div>
                         <div class="space-y-2">
                             <template x-for="(o, oi) in q.options" x-bind:key="oi">
-                                <div class="flex items-center gap-2">
-                                    <input type="text" placeholder="Option label" required x-model="o.label"
-                                           x-bind:name="`questions[${qi}][options][${oi}][label]`"
-                                           class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                    <button type="button" x-on:click="removeOption(qi, oi)"
-                                            class="shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-xs text-gray-500 hover:bg-white">✕</button>
+                                <div class="rounded-lg border border-gray-200 bg-white p-2">
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" placeholder="Option title" required x-model="o.title"
+                                               x-bind:name="`questions[${qi}][options][${oi}][title]`"
+                                               class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <button type="button" x-on:click="removeOption(qi, oi)"
+                                                class="shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-xs text-gray-500 hover:bg-white">✕</button>
+                                    </div>
+
+                                    {{-- Branching only: where does picking this option lead? --}}
+                                    <template x-if="isBranching()">
+                                        <div class="mt-2 flex items-center gap-2 pl-1 text-sm">
+                                            <span class="text-gray-400">→ go to</span>
+                                            {{-- Bind each option's `selected` state directly instead of using
+                                                 x-model, so the saved target shows on edit (x-model can't set a
+                                                 select value before its x-for options have rendered). --}}
+                                            <select x-on:change="o.next_key = $event.target.value"
+                                                    x-bind:name="`questions[${qi}][options][${oi}][next_key]`"
+                                                    class="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                <option value="" x-bind:selected="o.next_key === ''">End survey</option>
+                                                <template x-for="t in targetsFor(qi)" x-bind:key="t.key">
+                                                    <option x-bind:value="t.key"
+                                                            x-bind:selected="o.next_key === t.key"
+                                                            x-text="`#${t.index + 1} ` + (t.title || '(untitled)')"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
                             <template x-if="q.options.length === 0">
